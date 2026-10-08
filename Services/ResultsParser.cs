@@ -18,26 +18,37 @@ namespace WukongBenchmarkAutomator.Services;
 /// </summary>
 public static class ResultsParser
 {
-    public static void Enrich(BenchmarkResult result, string installDir)
+    public static void Enrich(BenchmarkResult result, string installDir, bool interactive = true)
     {
-        if (!result.Success) return;
+        // 1. Try logs first (best-effort)
+        var fromLogs = TryParseFromLogs(result, installDir);
 
-        // 1. Try log files
-        if (TryParseFromLogs(result, installDir))
-            return;
+        // 2. Ask user for the numbers shown on screen
+        if (interactive)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($">>> [{result.Label}] Look at the Benchmark Tool results screen and enter the numbers below.");
+            Console.WriteLine("    (Press Enter to leave a field empty)");
+            Console.ResetColor();
 
-        // 2. Placeholder for screenshot + OCR
-        result.RawText = """
-            [ResultsParser] No numeric results found in log files.
-            The Benchmark Tool displays results only on-screen.
+            result.AverageFps       = AskDouble("Average FPS", result.AverageFps);
+            result.MinFps           = AskDouble("Min FPS", result.MinFps);
+            result.MaxFps           = AskDouble("Max FPS", result.MaxFps);
+            result.OnePercentLow    = AskDouble("1% Low", result.OnePercentLow);
+            result.PointOnePercentLow = AskDouble("0.1% Low", result.PointOnePercentLow);
 
-            To enable automatic extraction:
-              • Add the Tesseract NuGet package
-              • Capture the results window (or full desktop) after the run
-              • Run OCR and feed the text into ParseFpsFromText()
+            if (result.AverageFps.HasValue || result.MinFps.HasValue)
+                result.Success = true;
 
-            For now the settings used for this pass are still recorded above.
-            """;
+            result.RawText = fromLogs
+                ? "(numbers from logs + manual confirmation)"
+                : "(numbers entered manually from on-screen results)";
+        }
+        else if (!fromLogs)
+        {
+            result.RawText = "[ResultsParser] No numbers found in logs. Re-run without --no-prompt.";
+        }
     }
 
     private static bool TryParseFromLogs(BenchmarkResult result, string installDir)
@@ -124,5 +135,23 @@ public static class ResultsParser
                 return v;
         }
         return null;
+    }
+
+    private static double? AskDouble(string label, double? current)
+    {
+        var hint = current.HasValue ? $" [{current.Value:F1}]" : "";
+        Console.Write($"  {label}{hint}: ");
+        var line = Console.ReadLine()?.Trim();
+        if (string.IsNullOrWhiteSpace(line))
+            return current;
+
+        if (double.TryParse(line.Replace(',', '.'),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var v))
+            return v;
+
+        Console.WriteLine("    (invalid number – kept previous value)");
+        return current;
     }
 }
