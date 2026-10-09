@@ -2,24 +2,28 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>WukongBenchmarkAutomator</RootNamespace>
     <AssemblyName>WukongBenchmarkAutomator</AssemblyName>
-    <Version>1.0.0</Version>
-    <!-- Windows-only because the Benchmark Tool is Windows-only -->
+    <Version>1.1.0</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- WMI for CPU / RAM / GPU enumeration -->
     <PackageReference Include="System.Management" Version="8.0.0" />
-    <!-- Optional: real OCR later. Stub does not require it. -->
-    <!-- <PackageReference Include="Tesseract" Version="5.2.0" /> -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+  </ItemGroup>
+
+  <!-- Copy tessdata next to the output so Tesseract finds eng.traineddata -->
+  <ItemGroup>
+    <None Include="tessdata\**\*" CopyToOutputDirectory="PreserveNewest" Link="tessdata\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

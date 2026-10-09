@@ -11,11 +11,17 @@ internal static class Program
         Console.WriteLine("""
             ╔══════════════════════════════════════════════════════════╗
             ║  Black Myth: Wukong Benchmark Automator  (.NET 8)        ║
-            ║  CPU-test + GPU-test in one run                          ║
+            ║  CPU-test + GPU-test  |  OCR results extraction          ║
             ╚══════════════════════════════════════════════════════════╝
             """);
 
         bool noPrompt = args.Any(a => a is "--no-prompt" or "-q");
+        bool skipOcr = args.Any(a => a is "--no-ocr");
+
+        // tessdata next to the executable (or ./tessdata when running from project)
+        string tessdataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
+        if (!Directory.Exists(tessdataPath))
+            tessdataPath = Path.GetFullPath("./tessdata");
 
         // ------------------------------------------------------------------
         // 1. Locate the Benchmark Tool
@@ -31,6 +37,7 @@ internal static class Program
             return 1;
         }
         Console.WriteLine($"Install directory : {installDir}");
+        Console.WriteLine($"OCR tessdata      : {tessdataPath}  (exists={Directory.Exists(tessdataPath)})");
 
         // ------------------------------------------------------------------
         // 2. System information
@@ -58,7 +65,14 @@ internal static class Program
         Console.WriteLine("══════════════════════════════════════════════════════════");
         var cpuProfile = BenchmarkProfile.CpuTest;
         var cpuResult = await runner.RunAsync("CPU", cpuProfile);
-        ResultsParser.Enrich(cpuResult, installDir, interactive: !noPrompt);
+
+        string? cpuShot = null;
+        if (!skipOcr)
+        {
+            Console.WriteLine("[CPU] Capturing screenshot for OCR…");
+            cpuShot = ScreenshotHelper.CapturePrimaryToTemp("wukong_cpu");
+        }
+        ResultsParser.Enrich(cpuResult, installDir, cpuShot, tessdataPath, interactive: !noPrompt);
 
         TryCloseBenchmarkProcesses();
         await Task.Delay(2000);
@@ -72,7 +86,14 @@ internal static class Program
         Console.WriteLine("══════════════════════════════════════════════════════════");
         var gpuProfile = BenchmarkProfile.GpuTest(screenW, screenH);
         var gpuResult = await runner.RunAsync("GPU", gpuProfile);
-        ResultsParser.Enrich(gpuResult, installDir, interactive: !noPrompt);
+
+        string? gpuShot = null;
+        if (!skipOcr)
+        {
+            Console.WriteLine("[GPU] Capturing screenshot for OCR…");
+            gpuShot = ScreenshotHelper.CapturePrimaryToTemp("wukong_gpu");
+        }
+        ResultsParser.Enrich(gpuResult, installDir, gpuShot, tessdataPath, interactive: !noPrompt);
 
         TryCloseBenchmarkProcesses();
 
@@ -91,7 +112,7 @@ internal static class Program
             AppContext.BaseDirectory,
             $"WukongBenchmark_Report_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
 
-        var reportText = $"""
+        await File.WriteAllTextAsync(reportPath, $"""
             Black Myth: Wukong Benchmark Automator – Report
             Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}
 
@@ -100,22 +121,20 @@ internal static class Program
             {cpuResult}
 
             {gpuResult}
-            """;
-
-        await File.WriteAllTextAsync(reportPath, reportText);
+            """);
         Console.WriteLine();
         Console.WriteLine($"Report saved to: {reportPath}");
 
         Console.WriteLine();
         Console.WriteLine("── Summary ──────────────────────────────────────────────");
-        Console.WriteLine($"  CPU  Avg={Fmt(cpuResult.AverageFps)}  Min={Fmt(cpuResult.MinFps)}  1%Low={Fmt(cpuResult.OnePercentLow)}");
-        Console.WriteLine($"  GPU  Avg={Fmt(gpuResult.AverageFps)}  Min={Fmt(gpuResult.MinFps)}  1%Low={Fmt(gpuResult.OnePercentLow)}");
+        Console.WriteLine($"  CPU  Avg={Fmt(cpuResult.AverageFps)}  Max={Fmt(cpuResult.MaxFps)}  Min={Fmt(cpuResult.MinFps)}  5%Low={Fmt(cpuResult.OnePercentLow)}");
+        Console.WriteLine($"  GPU  Avg={Fmt(gpuResult.AverageFps)}  Max={Fmt(gpuResult.MaxFps)}  Min={Fmt(gpuResult.MinFps)}  5%Low={Fmt(gpuResult.OnePercentLow)}");
         Console.WriteLine("────────────────────────────────────────────────────────");
 
         return 0;
     }
 
-    private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("F1") : "n/a";
+    private static string Fmt(double? v) => v.HasValue ? v.Value.ToString("F0") : "n/a";
 
     private static void TryCloseBenchmarkProcesses()
     {
@@ -131,11 +150,11 @@ internal static class Program
                         if (!p.WaitForExit(3000))
                             p.Kill(entireProcessTree: true);
                     }
-                    catch { /* ignore */ }
+                    catch { }
                     finally { p.Dispose(); }
                 }
             }
         }
-        catch { /* ignore */ }
+        catch { }
     }
 }
