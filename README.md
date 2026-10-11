@@ -2,6 +2,8 @@
 
 .NET 8 console tool that runs the free *Black Myth: Wukong Benchmark Tool* (Steam AppID **3132990**) twice with different graphics profiles and produces a readable report with real FPS numbers.
 
+![Wukong Benchmark Automator](docs/hero.jpg)
+
 ## What it does
 
 1. Locates the Benchmark Tool (Steam registry / library folders / `WUKONG_BENCHMARK_PATH`).
